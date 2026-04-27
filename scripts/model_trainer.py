@@ -75,8 +75,15 @@ class CornYieldDataset(Dataset):
     def __getitem__(self, idx):
         file_path = os.path.join(self.folder_path, self.files[idx])
         with rasterio.open(file_path) as src:
-            # SAFETY: Convert NaNs to 0.0 before normalization
-            data = np.nan_to_num(src.read().astype(np.float32), nan=0.0) / 10000.0
+            data = src.read().astype(np.float32)
+            
+        # --- ABSOLUTE SAFETY CLAMP ---
+        # 1. Neutralize NaNs and Infinities to 0.0
+        data = np.nan_to_num(data, nan=0.0, posinf=0.0, neginf=0.0)
+        # 2. Hard clamp satellite reflectance values strictly between 0 and 10000
+        data = np.clip(data, 0.0, 10000.0)
+        # 3. Normalize to [0, 1] range for Deep Learning
+        data = data / 10000.0
         
         # Reshape to (Months, Channels, H, W) -> (6, 4, H, W)
         temporal_tensor = torch.from_numpy(data).view(6, 4, data.shape[1], data.shape[2])
